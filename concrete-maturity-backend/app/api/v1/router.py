@@ -8,6 +8,7 @@ from app.api.v1.endpoints.mix_profiles import router as mix_profiles_router
 from app.api.v1.endpoints.readings import router as readings_router
 from app.api.v1.endpoints.sensors import router as sensors_router
 from app.api.v1.endpoints.telemetry import router as telemetry_router
+from app.api.v1.endpoints.thingsboard import router as thingsboard_router
 
 api_router = APIRouter()
 
@@ -17,3 +18,4 @@ api_router.include_router(sensors_router, prefix="/sensors", tags=["Sensors"])
 api_router.include_router(readings_router, prefix="/readings", tags=["Readings"])
 api_router.include_router(alerts_router, prefix="/alerts", tags=["Alerts"])
 api_router.include_router(mix_profiles_router, prefix="/mix-profiles", tags=["Mix Profiles"])
+api_router.include_router(thingsboard_router, prefix="/thingsboard", tags=["ThingsBoard"])

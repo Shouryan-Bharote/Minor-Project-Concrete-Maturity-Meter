@@ -36,7 +36,13 @@
     stop: '<rect width="14" height="14" x="5" y="5" rx="2"/>',
     download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
     reset: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
-    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>'
+    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+    cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+    refresh: '<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M21 21v-5h-5"/>',
+    database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>',
+    arrowRight: '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
+    copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+    check: '<polyline points="20 6 9 17 4 12"/>'
   };
 
   function icon(name, size) {
@@ -88,7 +94,7 @@
   const DEFAULTS = {
     datum: -10,          // Nurse-Saul datum temperature T0 (°C)
     refTemp: 20,         // reference temperature for equivalent age (°C)
-    mode: 'sim',         // 'sim' | 'esp'
+    mode: 'sim',         // 'sim' | 'esp' | 'tb'
     speed: 600,          // simulation speed multiplier
     endpoint: 'http://192.168.4.1/api/latest',
     pollSec: 2,
@@ -109,7 +115,7 @@
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* ignore */ }
   }
   const settings = loadSettings();
-  if (settings.mode !== 'sim' && settings.mode !== 'esp') settings.mode = 'sim';
+  if (settings.mode !== 'sim' && settings.mode !== 'esp' && settings.mode !== 'tb') settings.mode = 'sim';
 
   /* ------------------------------------------------------------------ *
    * 3. State + maturity maths
@@ -117,8 +123,11 @@
   const state = {
     samples: [],        // { t: hours since start, temp: °C, wall: ms epoch, m: °C·h, src }
     running: false,
-    status: 'offline',  // for ESP mode: 'connecting' | 'connected' | 'offline'
-    lastError: null
+    status: 'offline',  // for ESP/TB mode: 'connecting' | 'connected' | 'offline'
+    lastError: null,
+    tbDevice: null,
+    tbKeys: [],
+    tbRaw: {}
   };
 
   /* Nurse-Saul: M = Σ (Ta − T0) · Δt, counting only intervals where Ta > T0.
@@ -219,6 +228,295 @@
     }
   }
 
+  /* --- ThingsBoard REST API (via FastAPI backend) -------------------- */
+  const tbStream = {
+    history: [],
+    lastData: null,
+    isFetching: false
+  };
+
+  function getApiBase() {
+    if (window.location.protocol === 'file:') return 'http://localhost:8000';
+    if (window.location.port !== '8000' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      return 'http://localhost:8000';
+    }
+    return '';
+  }
+
+  async function fetchThingsBoardStatus() {
+    try {
+      const res = await fetch(getApiBase() + '/api/v1/thingsboard/status', { cache: 'no-store' });
+      if (!res.ok) return;
+      const statusData = await res.json();
+      const statusEl = $('#tbBadgeStatus');
+      if (statusEl) {
+        statusEl.textContent = statusData.configured ? 'CONFIGURED' : 'NOT CONFIGURED';
+        statusEl.className = 'badge ' + (statusData.configured ? 'badge--live' : 'badge--sim');
+      }
+      if (statusData.configured) {
+        const dRes = await fetch(getApiBase() + '/api/v1/thingsboard/device', { cache: 'no-store' });
+        if (dRes.ok) {
+          const dev = await dRes.json();
+          state.tbDevice = dev;
+          if ($('#tbDeviceName')) $('#tbDeviceName').textContent = dev.name || 'Unknown';
+          if ($('#tbDeviceId')) $('#tbDeviceId').textContent = dev.id || '—';
+          if ($('#dashTbDevName')) $('#dashTbDevName').textContent = dev.name || 'ESP32 Curing Sensor Unit 1';
+          if ($('#dashTbDevId')) $('#dashTbDevId').textContent = dev.id || '—';
+        }
+        await discoverThingsBoardKeys();
+      }
+    } catch (e) {
+      // Backend not yet reachable
+    }
+  }
+
+  async function discoverThingsBoardKeys() {
+    try {
+      const res = await fetch(getApiBase() + '/api/v1/thingsboard/keys', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.keys)) {
+        state.tbKeys = data.keys;
+        renderThingsBoardKeyChips(data.keys);
+      }
+    } catch (e) {}
+  }
+
+  function renderThingsBoardKeyChips(keys) {
+    if (!keys) keys = [];
+    if ($('#tbKeyCount')) $('#tbKeyCount').textContent = keys.length;
+    if ($('#dashTbKeysCount')) $('#dashTbKeysCount').textContent = keys.length + ' KEYS';
+    const chipsHtml = keys.length
+      ? keys.map(function (k) { return '<span class="key-chip">' + esc(k) + '</span>'; }).join(' ')
+      : '<span style="color: var(--muted); font-style: italic;">No keys discovered yet</span>';
+    if ($('#tbKeyChips')) $('#tbKeyChips').innerHTML = chipsHtml;
+    if ($('#dashTbKeysList')) $('#dashTbKeysList').innerHTML = chipsHtml;
+  }
+
+  async function fetchThingsBoardLiveData() {
+    if (tbStream.isFetching) return;
+    tbStream.isFetching = true;
+    try {
+      const res = await fetch(getApiBase() + '/api/v1/thingsboard/telemetry/latest', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      tbStream.lastData = data;
+      renderThingsBoardDashboard(data);
+    } catch (err) {
+      if ($('#bannerSyncTime')) $('#bannerSyncTime').textContent = 'Backend offline · Run FastAPI on port 8000';
+      if ($('#bannerTbStatus')) {
+        $('#bannerTbStatus').textContent = 'OFFLINE';
+        $('#bannerTbStatus').className = 'badge badge--sim';
+      }
+      if ($('#tbPollIndicator')) {
+        $('#tbPollIndicator').className = 'tb-poll-status';
+        $('#tbPollIndicator').style.color = 'var(--bad)';
+        $('#tbPollIndicator').style.borderColor = '#efc9c5';
+        if ($('#tbPollText')) $('#tbPollText').textContent = 'API Offline';
+      }
+    } finally {
+      tbStream.isFetching = false;
+    }
+  }
+
+  function renderThingsBoardDashboard(data) {
+    if (!data) return;
+
+    // 1. Overview Banner elements
+    if ($('#bannerTbDeviceId') && data.device_id) {
+      $('#bannerTbDeviceId').textContent = data.device_id;
+    }
+    if ($('#bannerTbTemp')) {
+      $('#bannerTbTemp').textContent = data.temperature_c != null ? fmtNum(data.temperature_c, 1) : '--';
+    }
+    if ($('#bannerTbMat')) {
+      $('#bannerTbMat').textContent = data.maturity_c_hour != null ? fmtNum(data.maturity_c_hour, 1) : '--';
+    }
+    if ($('#bannerTbStatus')) {
+      const isOk = data.sensor_status !== false;
+      $('#bannerTbStatus').textContent = isOk ? 'ONLINE' : 'SENSOR ERROR';
+      $('#bannerTbStatus').className = 'badge ' + (isOk ? 'badge--live' : 'badge--sim');
+    }
+    if ($('#bannerSyncTime')) {
+      const timeStr = data.recorded_at ? new Date(data.recorded_at).toLocaleTimeString() : new Date().toLocaleTimeString();
+      $('#bannerSyncTime').textContent = 'Synced at ' + timeStr;
+    }
+
+    // 2. ThingsBoard Dedicated Dashboard Section
+    if ($('#dashTbDevId') && data.device_id) $('#dashTbDevId').textContent = data.device_id;
+    if ($('#dashTbMode')) $('#dashTbMode').textContent = (data.data_mode || 'REAL').toUpperCase();
+    if ($('#dashTbRecordedAt')) {
+      $('#dashTbRecordedAt').textContent = data.recorded_at ? new Date(data.recorded_at).toLocaleString() : '—';
+    }
+
+    // 3. Four Core Metrics
+    if ($('#tbValTemp')) $('#tbValTemp').textContent = data.temperature_c != null ? fmtNum(data.temperature_c, 1) : '--';
+    if ($('#tbValMat')) $('#tbValMat').textContent = data.maturity_c_hour != null ? fmtNum(data.maturity_c_hour, 1) : '--';
+    if ($('#tbValHours')) $('#tbValHours').textContent = data.simulated_hours != null ? fmtNum(data.simulated_hours, 2) : '--';
+    if ($('#tbValStatus')) {
+      const isOk = data.sensor_status !== false;
+      $('#tbValStatus').textContent = isOk ? 'ONLINE' : 'ERROR';
+      if ($('#tbSensorChip')) $('#tbSensorChip').className = 'chip ' + (isOk ? 'chip--green' : 'chip--amber');
+      if ($('#tbStatusDetail')) $('#tbStatusDetail').textContent = isOk ? 'Telemetry streaming actively' : 'Sensor fault detected';
+    }
+
+    // 4. Timeseries History for Live Chart & Sparklines
+    const temp = data.temperature_c;
+    const hours = typeof data.simulated_hours === 'number' && data.simulated_hours > 0
+      ? data.simulated_hours
+      : (tbStream.history.length ? tbStream.history[tbStream.history.length - 1].x + 0.02 : 0.05);
+
+    if (temp != null && Number.isFinite(temp)) {
+      const lastPt = tbStream.history[tbStream.history.length - 1];
+      if (!lastPt || lastPt.wall !== data.ts) {
+        tbStream.history.push({ x: hours, y: temp, m: data.maturity_c_hour || 0, wall: data.ts });
+        if (tbStream.history.length > 200) tbStream.history.shift();
+      }
+    }
+
+    const tempVals = tbStream.history.map(function (p) { return p.y; });
+    const matVals = tbStream.history.map(function (p) { return p.m; });
+    if ($('#tbSparkTemp')) $('#tbSparkTemp').innerHTML = sparkline(tempVals, '#0284c7');
+    if ($('#tbSparkMat')) $('#tbSparkMat').innerHTML = sparkline(matVals, '#0d9488');
+
+    if (window.tbLiveChart) {
+      window.tbLiveChart.setData(tbStream.history);
+    }
+
+    // 5. Discovered Keys
+    if (Array.isArray(data.keys)) {
+      renderThingsBoardKeyChips(data.keys);
+    }
+
+    // 6. Raw Values Table
+    if (data.raw_values && $('#dashTbRawBody')) {
+      const rows = [];
+      for (const k in data.raw_values) {
+        const val = data.raw_values[k];
+        const type = typeof val === 'boolean' ? 'bool' : typeof val === 'number' ? (Number.isInteger(val) ? 'int' : 'float') : 'string';
+        rows.push('<tr><td><code>' + esc(k) + '</code></td><td><strong>' + esc(val) + '</strong></td><td class="num"><span class="type-badge">' + type + '</span></td></tr>');
+      }
+      $('#dashTbRawBody').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="3" style="text-align:center; color:var(--muted);">No raw keys</td></tr>';
+    }
+
+    // Polling Indicator Pill
+    if ($('#tbPollIndicator')) {
+      $('#tbPollIndicator').className = 'tb-poll-status';
+      $('#tbPollIndicator').style.color = 'var(--ok)';
+      $('#tbPollIndicator').style.borderColor = '#bfe6d2';
+      if ($('#tbPollText')) $('#tbPollText').textContent = 'Live (3s)';
+    }
+  }
+
+  async function pollThingsBoardOnce() {
+    if (!state.running || settings.mode !== 'tb') return;
+    const ctrl = new AbortController();
+    pollAbort = ctrl;
+    const to = setTimeout(function () { ctrl.abort(); }, 6000);
+    try {
+      const res = await fetch(getApiBase() + '/api/v1/thingsboard/telemetry/latest', {
+        cache: 'no-store',
+        signal: ctrl.signal
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(function () { return {}; });
+        throw new Error(errJson.detail || 'ThingsBoard answered HTTP ' + res.status);
+      }
+      const data = await res.json();
+      if (Array.isArray(data.keys) && data.keys.length) {
+        state.tbKeys = data.keys;
+        renderThingsBoardKeyChips(data.keys);
+      }
+      if (data.raw_values) state.tbRaw = data.raw_values;
+
+      let temp = data.temperature_c;
+      if (temp == null && data.raw_values) {
+        for (const k in data.raw_values) {
+          if (k.toLowerCase().includes('temp') && typeof data.raw_values[k] === 'number') {
+            temp = data.raw_values[k];
+            break;
+          }
+        }
+      }
+
+      if (temp == null || !Number.isFinite(temp)) {
+        throw new Error('No temperature reading found in ThingsBoard telemetry yet');
+      }
+
+      // Time axis: prefer simulated_hours from device if present, else continue elapsed time
+      let t;
+      if (typeof data.simulated_hours === 'number' && data.simulated_hours > 0) {
+        t = data.simulated_hours;
+      } else {
+        t = runBaseT + (performance.now() - runStartPerf) / 3.6e6;
+      }
+
+      const wall = data.ts || Date.now();
+      addSample(temp, t, wall, 'ThingsBoard');
+
+      if (typeof data.maturity_c_hour === 'number' && state.samples.length) {
+        state.samples[state.samples.length - 1].m = data.maturity_c_hour;
+      }
+
+      state.status = 'connected';
+      state.lastError = null;
+    } catch (err) {
+      if (!state.running) return;
+      state.status = 'offline';
+      state.lastError = err.name === 'AbortError' ? 'Request timed out'
+        : err instanceof TypeError ? 'Cannot reach backend (ensure FastAPI server is running)'
+        : err.message || 'ThingsBoard fetch failed';
+    } finally {
+      clearTimeout(to);
+    }
+
+    if (state.running && settings.mode === 'tb') {
+      render();
+      timer = setTimeout(pollThingsBoardOnce, settings.pollSec * 1000);
+    }
+  }
+
+  async function loadThingsBoardHistory() {
+    try {
+      flash('Fetching history from ThingsBoard…');
+      const res = await fetch(getApiBase() + '/api/v1/thingsboard/telemetry/history?limit=500', { cache: 'no-store' });
+      if (!res.ok) {
+        const errJson = await res.json().catch(function () { return {}; });
+        throw new Error(errJson.detail || 'HTTP ' + res.status);
+      }
+      const history = await res.json();
+      if (!history.data || !history.data.length) {
+        flash('No historical telemetry found for this device in ThingsBoard.');
+        return;
+      }
+
+      stop();
+      state.samples = [];
+      const firstTs = history.data[0].ts;
+      history.data.forEach(function (pt) {
+        if (pt.temperature_c == null) return;
+        const t = pt.simulated_hours != null ? pt.simulated_hours : (pt.ts - firstTs) / 3.6e6;
+        const s = {
+          t: t,
+          temp: pt.temperature_c,
+          wall: pt.ts,
+          m: pt.maturity_c_hour != null ? pt.maturity_c_hour : 0,
+          src: 'ThingsBoard'
+        };
+        state.samples.push(s);
+      });
+
+      if (state.samples.length && state.samples.every(function (s) { return s.m === 0; })) {
+        recomputeMaturity();
+      }
+
+      render();
+      flash('Loaded ' + state.samples.length + ' historical readings from ThingsBoard.');
+    } catch (err) {
+      flash('Failed to load history: ' + (err.message || err));
+    }
+  }
+
   /* --- Start / stop -------------------------------------------------- */
   function lastT() {
     const S = state.samples;
@@ -233,11 +531,17 @@
       lastPerf = performance.now();
       if (!state.samples.length) addSample(simTemperature(0), 0, Date.now(), 'Simulated');
       timer = setInterval(simTick, 1000);
-    } else {
+    } else if (settings.mode === 'esp') {
       state.status = 'connecting';
       runBaseT = lastT();
       runStartPerf = performance.now();
       pollOnce();
+    } else if (settings.mode === 'tb') {
+      state.status = 'connecting';
+      runBaseT = lastT();
+      runStartPerf = performance.now();
+      fetchThingsBoardStatus();
+      pollThingsBoardOnce();
     }
     render();
   }
@@ -420,6 +724,7 @@
 
   const tempChart = new LineChart($('#chartTemp'), { height: 300, decimals: 2, unit: '°C', color: '#2f5bea', name: 'Temperature' });
   const matChart = new LineChart($('#chartMat'), { height: 300, decimals: 1, unit: '°C·h', color: '#0e7490', name: 'Maturity', zero: true });
+  window.tbLiveChart = $('#chartTbLive') ? new LineChart($('#chartTbLive'), { height: 280, decimals: 2, unit: '°C', color: '#0284c7', name: 'ThingsBoard Temp' }) : null;
 
   /* ------------------------------------------------------------------ *
    * 6. Rendering
@@ -431,6 +736,17 @@
     }
     if (settings.mode === 'sim') {
       return { key: 'simulated', label: 'Simulated', detail: 'Software model, no hardware attached' };
+    }
+    if (settings.mode === 'tb') {
+      if (state.status === 'connected' && last) {
+        const age = Math.max(0, Math.round((Date.now() - last.wall) / 1000));
+        const devName = state.tbDevice ? state.tbDevice.name : 'ThingsBoard';
+        return { key: 'connected', label: 'ThingsBoard Connected', detail: devName + ' · last reading ' + age + ' s ago' };
+      }
+      if (state.status === 'connecting') {
+        return { key: 'connecting', label: 'Connecting ThingsBoard', detail: 'Contacting ThingsBoard REST API…' };
+      }
+      return { key: 'offline', label: 'ThingsBoard Offline', detail: state.lastError || 'ThingsBoard unreachable' };
     }
     if (state.status === 'connected' && last) {
       const age = Math.max(0, Math.round((Date.now() - last.wall) / 1000));
@@ -457,11 +773,24 @@
     const S = state.samples, n = S.length;
     const last = n ? S[n - 1] : null, prev = n > 1 ? S[n - 2] : null;
     const isSim = settings.mode === 'sim';
+    const isTb = settings.mode === 'tb';
 
     renderSensor();
-    $('#notice').classList.toggle('is-hidden', !isSim);
+    $('#notice').classList.toggle('is-hidden', false);
+    const noticeEl = $('#noticeText');
+    if (noticeEl) {
+      if (isSim) {
+        noticeEl.innerHTML = '<strong>Simulated data.</strong> Readings are produced by a software model, not a sensor. Switch the data source in Settings to use an ESP32 or ThingsBoard.';
+      } else if (isTb) {
+        const devName = state.tbDevice ? state.tbDevice.name : 'Device';
+        const keyList = state.tbKeys.length ? ' · Discovered keys: ' + state.tbKeys.join(', ') : '';
+        noticeEl.innerHTML = '<strong>ThingsBoard Live Stream.</strong> Connected to physical IoT device <strong>' + esc(devName) + '</strong> via REST API' + esc(keyList) + '.';
+      } else {
+        noticeEl.innerHTML = '<strong>ESP32 Direct HTTP.</strong> Polling local device endpoint at <code>' + esc(settings.endpoint) + '</code>.';
+      }
+    }
     $('#sbDatum').textContent = fmtNum(settings.datum, 1).replace('.0', '') + ' °C';
-    $('#sbSource').textContent = isSim ? 'Simulated' : 'ESP32 (HTTP)';
+    $('#sbSource').textContent = isSim ? 'Simulated' : isTb ? 'ThingsBoard (IoT)' : 'ESP32 (HTTP)';
 
     /* metric cards */
     $('#valTemp').textContent = last ? fmtNum(last.temp, 1) : '--';
@@ -497,8 +826,8 @@
 
     /* chart badges + data */
     $$('#badgeTemp, #badgeMat').forEach(function (b) {
-      b.textContent = isSim ? 'SIMULATED' : 'LIVE';
-      b.className = 'badge ' + (isSim ? 'badge--sim' : 'badge--live');
+      b.textContent = isSim ? 'SIMULATED' : isTb ? 'THINGSBOARD' : 'LIVE';
+      b.className = 'badge ' + (isSim ? 'badge--sim' : isTb ? 'badge--tb' : 'badge--live');
     });
     const view = downsample(S, 400);
     tempChart.setData(view.map(function (s) { return { x: s.t, y: s.temp }; }));
@@ -510,22 +839,27 @@
 
   function renderLive(last, prev, isSim) {
     const running = state.running;
+    const isTb = settings.mode === 'tb';
     $('#runIndicator').classList.toggle('is-running', running);
     $('#runText').textContent = isSim
       ? (running ? 'Simulation running · ' + settings.speed + '×' : 'Simulation stopped')
+      : isTb
+      ? (running ? 'Streaming from ThingsBoard' : 'Streaming stopped')
       : (running ? 'Monitoring ESP32' : 'Monitoring stopped');
-    $('#startLabel').textContent = isSim ? 'Start Simulation' : 'Start Monitoring';
+    $('#startLabel').textContent = isSim ? 'Start Simulation' : isTb ? 'Start ThingsBoard Stream' : 'Start Monitoring';
     $('#stopLabel').textContent = isSim ? 'Stop Simulation' : 'Stop Monitoring';
     $('#btnStart').disabled = running;
     $('#btnStop').disabled = !running;
-    $('#ctlTitle').textContent = isSim ? 'Simulation control' : 'Device monitoring';
-    $('#ctlSub').textContent = isSim ? 'Generates a realistic curing temperature curve.' : 'Polls your ESP32 for live temperature readings.';
+    $('#ctlTitle').textContent = isSim ? 'Simulation control' : isTb ? 'ThingsBoard IoT Stream' : 'Device monitoring';
+    $('#ctlSub').textContent = isSim ? 'Generates a realistic curing temperature curve.' : isTb ? 'Streams real-time telemetry from ThingsBoard REST API.' : 'Polls your ESP32 for live temperature readings.';
     $('#speedField').classList.toggle('is-hidden', !isSim);
     $$('#speedSeg button').forEach(function (b) {
       b.setAttribute('aria-pressed', String(parseInt(b.dataset.speed, 10) === settings.speed));
     });
     $('#speedNote').textContent = isSim
       ? '1 s of real time = ' + fmtNum(settings.speed / 60, 0) + ' min of simulated curing time.'
+      : isTb
+      ? 'Polling ThingsBoard REST API every ' + settings.pollSec + ' s.'
       : 'Polling ' + settings.endpoint + ' every ' + settings.pollSec + ' s.';
     $('#elapsedLabel').textContent = isSim ? 'Simulated curing time' : 'Elapsed time';
     $('#liveElapsed').textContent = last ? fmtDuration(last.t) : '0 min';
@@ -571,11 +905,12 @@
     let rows = '';
     for (let i = n - 1, k = 0; i >= 0 && k < 12; i--, k++) {
       const s = S[i];
+      const tagClass = s.src === 'Simulated' ? 'src-tag' : s.src === 'ThingsBoard' ? 'src-tag src-tag--tb' : 'src-tag src-tag--live';
       rows += '<tr><td>' + fmtDuration(s.t) + '</td>' +
         '<td>' + new Date(s.wall).toLocaleTimeString('en-GB') + '</td>' +
         '<td class="num">' + fmtNum(s.temp, 2) + ' °C</td>' +
         '<td class="num">' + fmtNum(s.m, 1) + ' °C·h</td>' +
-        '<td><span class="src-tag' + (s.src === 'Simulated' ? '' : ' src-tag--live') + '">' + esc(s.src.toUpperCase()) + '</span></td></tr>';
+        '<td><span class="' + tagClass + '">' + esc(s.src.toUpperCase()) + '</span></td></tr>';
     }
     body.innerHTML = rows;
   }
@@ -624,7 +959,10 @@
     $('#setCalA').value = settings.calA == null ? '' : settings.calA;
     $('#setCalB').value = settings.calB == null ? '' : settings.calB;
     $('#fieldEndpoint').classList.toggle('is-hidden', settings.mode !== 'esp');
-    $('#fieldPoll').classList.toggle('is-hidden', settings.mode !== 'esp');
+    $('#fieldPoll').classList.toggle('is-hidden', settings.mode === 'sim');
+    const tbInfo = $('#fieldTbInfo');
+    if (tbInfo) tbInfo.classList.toggle('is-hidden', settings.mode !== 'tb');
+    if (settings.mode === 'tb') fetchThingsBoardStatus();
   }
 
   function bindEvents() {
@@ -632,6 +970,8 @@
     $('#btnStop').addEventListener('click', stop);
     $('#btnExport').addEventListener('click', exportCsv);
     $('#btnExport2').addEventListener('click', exportCsv);
+    const btnHistory = $('#btnTbLoadHistory');
+    if (btnHistory) btnHistory.addEventListener('click', loadThingsBoardHistory);
     $('#btnReset').addEventListener('click', function () {
       if (!state.samples.length || confirm('Clear all readings and restart maturity from zero?')) resetData();
     });
@@ -695,6 +1035,63 @@
       saveSettings(); syncSettingsInputs(); render();
     });
 
+    /* ThingsBoard Redirect Buttons */
+    function redirectToThingsBoard(e) {
+      if (e) e.preventDefault();
+      window.location.href = 'thingsboard.html';
+    }
+    if ($('#topbarTbJump')) $('#topbarTbJump').addEventListener('click', redirectToThingsBoard);
+    if ($('#btnHeroJumpTb')) $('#btnHeroJumpTb').addEventListener('click', redirectToThingsBoard);
+
+    /* ThingsBoard Dashboard Controls */
+    if ($('#btnCopyUuid')) {
+      $('#btnCopyUuid').addEventListener('click', function () {
+        const uuid = $('#dashTbDevId') ? $('#dashTbDevId').textContent.trim() : '';
+        if (!uuid) return;
+        navigator.clipboard.writeText(uuid).then(function () {
+          const txt = $('#copyBtnText');
+          if (txt) {
+            const old = txt.textContent;
+            txt.textContent = 'Copied ✓';
+            setTimeout(function () { txt.textContent = old; }, 2000);
+          }
+          flash('Device UUID copied to clipboard');
+        }).catch(function () {
+          flash('Device UUID: ' + uuid);
+        });
+      });
+    }
+
+    if ($('#btnTbManualRefresh')) {
+      $('#btnTbManualRefresh').addEventListener('click', async function () {
+        flash('Refreshing telemetry from ThingsBoard…');
+        await fetchThingsBoardLiveData();
+      });
+    }
+
+    if ($('#btnTbSyncDb')) {
+      $('#btnTbSyncDb').addEventListener('click', async function () {
+        try {
+          flash('Syncing latest reading into database…');
+          const res = await fetch(getApiBase() + '/api/v1/thingsboard/sync', { method: 'POST' });
+          if (!res.ok) {
+            const err = await res.json().catch(function () { return {}; });
+            throw new Error(err.detail || 'HTTP ' + res.status);
+          }
+          const synced = await res.json();
+          flash('✓ Saved to database (Reading #' + synced.reading_id + ', ' + synced.temperature_c + ' °C)');
+        } catch (err) {
+          flash('Failed to sync to database: ' + (err.message || err));
+        }
+      });
+    }
+
+    if ($('#btnTbLoadHistDash')) {
+      $('#btnTbLoadHistDash').addEventListener('click', function () {
+        loadThingsBoardHistory();
+      });
+    }
+
     /* sidebar: highlight the section in view */
     const links = $$('.nav-link');
     function setActive(id) {
@@ -705,7 +1102,10 @@
       const io = new IntersectionObserver(function (entries) {
         entries.forEach(function (en) { if (en.isIntersecting) setActive(en.target.id); });
       }, { rootMargin: '-30% 0px -60% 0px' });
-      ['overview', 'live', 'history', 'settings'].forEach(function (id) { io.observe($('#' + id)); });
+      ['overview', 'thingsboard', 'live', 'history', 'settings'].forEach(function (id) {
+        const el = $('#' + id);
+        if (el) io.observe(el);
+      });
     }
   }
 
@@ -717,6 +1117,11 @@
   setInterval(tickClock, 1000);
   render();
 
+  // ThingsBoard background live telemetry polling
+  fetchThingsBoardStatus();
+  fetchThingsBoardLiveData();
+  setInterval(fetchThingsBoardLiveData, 3500);
+
   // Small read-only handle for debugging / automated checks from the browser console.
-  window.cmm = { state: state, settings: settings, start: start, stop: stop };
+  window.cmm = { state: state, settings: settings, start: start, stop: stop, fetchTb: fetchThingsBoardLiveData };
 })();

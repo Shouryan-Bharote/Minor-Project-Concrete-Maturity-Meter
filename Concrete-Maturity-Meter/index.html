@@ -17,6 +17,11 @@
     </div>
   </div>
   <div class="topbar-right">
+    <a href="thingsboard.html" class="btn btn--tb-jump" id="topbarTbJump" title="Open Dedicated ThingsBoard Dashboard">
+      <span data-icon="cloud" data-size="16"></span>
+      <span class="tb-jump-text">ThingsBoard Live</span>
+      <span class="pulse-indicator"></span>
+    </a>
     <div class="pill pill--offline" id="connPill" role="status" aria-live="polite">
       <span class="dot"></span><span id="connText">Sensor · Offline</span>
     </div>
@@ -29,6 +34,7 @@
   <nav class="sidebar" aria-label="Sections">
     <div class="nav">
       <a href="#overview" class="nav-link active" data-target="overview"><span data-icon="layout"></span><span>Overview</span></a>
+      <a href="thingsboard.html" class="nav-link"><span data-icon="cloud"></span><span>ThingsBoard Live</span><span class="nav-pill-live">NEW PAGE</span></a>
       <a href="#live" class="nav-link" data-target="live"><span data-icon="activity"></span><span>Live Monitoring</span></a>
       <a href="#history" class="nav-link" data-target="history"><span data-icon="history"></span><span>Temperature History</span></a>
       <a href="#settings" class="nav-link" data-target="settings"><span data-icon="sliders"></span><span>Settings</span></a>
@@ -45,7 +51,7 @@
 
       <div class="notice" id="notice">
         <span data-icon="info" data-size="16"></span>
-        <span><strong>Simulated data.</strong> Readings are produced by a software model, not a sensor. Switch the data source in Settings to use an ESP32.</span>
+        <span id="noticeText"><strong>Simulated data.</strong> Readings are produced by a software model, not a sensor. Switch the data source in Settings to use an ESP32 or ThingsBoard.</span>
       </div>
 
       <!-- ============ OVERVIEW ============ -->
@@ -54,6 +60,27 @@
           <h2>Overview</h2>
           <p>Current state of the monitored concrete element.</p>
         </div>
+
+        <!-- Jump to ThingsBoard Banner -->
+        <article class="card card--tb-banner" id="overviewTbBanner">
+          <div class="tb-banner-icon-wrap" data-icon="cloud" data-size="28"></div>
+          <div class="tb-banner-body">
+            <div class="tb-banner-tags">
+              <span class="badge badge--tb"><span class="live-dot"></span> THINGSBOARD CLOUD IOT ACTIVE</span>
+              <span class="tb-banner-sync" id="bannerSyncTime">Ready · Auto-streaming from cloud</span>
+            </div>
+            <h3 class="tb-banner-title">Live Sensor Telemetry Stream</h3>
+            <p class="tb-banner-desc">
+              Connected Device: <code id="bannerTbDeviceId">da6577c0-d532-11f1-a4d4-bf613d4f8cee</code> · Temp: <strong id="bannerTbTemp">--</strong>°C · Maturity: <strong id="bannerTbMat">--</strong>°C·h · Sensor: <span class="badge badge--live" id="bannerTbStatus">ONLINE</span>
+            </p>
+          </div>
+          <div class="tb-banner-action">
+            <a href="thingsboard.html" class="btn btn--primary btn--glow" id="btnHeroJumpTb" title="Open Dedicated ThingsBoard Live Dashboard">
+              <span>Open Dedicated ThingsBoard Dashboard</span>
+              <span data-icon="arrowRight" data-size="16"></span>
+            </a>
+          </div>
+        </article>
 
         <div class="grid-metrics">
           <article class="card metric">
@@ -136,6 +163,171 @@
               <span class="badge badge--sim" id="badgeMat">SIMULATED</span>
             </div>
             <div id="chartMat"></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ============ THINGSBOARD IOT DASHBOARD ============ -->
+      <section id="thingsboard">
+        <div class="section-head section-head--row">
+          <div>
+            <div class="head-tag"><span class="badge badge--tb"><span class="live-dot"></span> CLOUD TELEMETRY STREAM</span></div>
+            <h2>ThingsBoard IoT Live Dashboard</h2>
+            <p>Direct real-time sensor telemetry streamed from ThingsBoard Cloud REST API.</p>
+          </div>
+          <div class="tb-action-bar">
+            <div class="tb-poll-status" id="tbPollIndicator">
+              <span class="pulse-dot"></span>
+              <span id="tbPollText">Live (3s)</span>
+            </div>
+            <a href="thingsboard.html" class="btn btn--sm btn--primary" title="Open Full Separate Page">
+              <span data-icon="cloud" data-size="14"></span>Dedicated Page →
+            </a>
+            <a href="/api/v1/thingsboard/telemetry/latest" target="_blank" class="btn btn--sm" title="View Raw API JSON Response">
+              <span data-icon="radio" data-size="14"></span>Raw API
+            </a>
+            <button class="btn btn--sm" type="button" id="btnTbManualRefresh" title="Fetch latest reading immediately">
+              <span data-icon="refresh" data-size="14"></span>Refresh
+            </button>
+            <button class="btn btn--sm" type="button" id="btnTbSyncDb" title="Persist this reading to local database">
+              <span data-icon="database" data-size="14"></span>Sync to DB
+            </button>
+          </div>
+        </div>
+
+        <!-- ThingsBoard Device Info Strip -->
+        <article class="card tb-device-strip">
+          <div class="tb-strip-col">
+            <span class="tb-strip-label">Device Name</span>
+            <strong class="tb-strip-val" id="dashTbDevName">ESP32 Curing Sensor Unit 1</strong>
+          </div>
+          <div class="tb-strip-divider"></div>
+          <div class="tb-strip-col">
+            <span class="tb-strip-label">Device UUID</span>
+            <div class="tb-uuid-wrap">
+              <code id="dashTbDevId">da6577c0-d532-11f1-a4d4-bf613d4f8cee</code>
+              <button class="btn-copy" id="btnCopyUuid" type="button" title="Copy UUID to clipboard">
+                <span data-icon="copy" data-size="12"></span><span id="copyBtnText">Copy</span>
+              </button>
+            </div>
+          </div>
+          <div class="tb-strip-divider"></div>
+          <div class="tb-strip-col">
+            <span class="tb-strip-label">Operating Mode</span>
+            <span class="badge badge--mode" id="dashTbMode">REAL</span>
+          </div>
+          <div class="tb-strip-divider"></div>
+          <div class="tb-strip-col">
+            <span class="tb-strip-label">ThingsBoard Timestamp</span>
+            <strong class="tb-strip-val" id="dashTbRecordedAt">—</strong>
+          </div>
+        </article>
+
+        <!-- 4 Thingsboard Telemetry Metrics -->
+        <div class="grid-metrics">
+          <article class="card metric metric--gradient-blue">
+            <div class="metric-top">
+              <span class="metric-label">ThingsBoard Temperature</span>
+              <span class="chip chip--blue" data-icon="thermo" data-size="18"></span>
+            </div>
+            <div class="metric-row">
+              <div class="metric-value"><span id="tbValTemp">--</span><span class="unit">°C</span></div>
+              <div class="spark" id="tbSparkTemp"></div>
+            </div>
+            <div class="metric-foot">
+              <span class="metric-detail" id="tbTempDelta">Latest reading from sensor</span>
+              <span class="metric-desc">ThingsBoard key: <code>temperature_c</code></span>
+            </div>
+          </article>
+
+          <article class="card metric metric--gradient-teal">
+            <div class="metric-top">
+              <span class="metric-label">Cumulative Maturity</span>
+              <span class="chip chip--teal" data-icon="layers" data-size="18"></span>
+            </div>
+            <div class="metric-row">
+              <div class="metric-value"><span id="tbValMat">--</span><span class="unit">°C·h</span></div>
+              <div class="spark" id="tbSparkMat"></div>
+            </div>
+            <div class="metric-foot">
+              <span class="metric-detail" id="tbMatDelta">Nurse-Saul maturity factor</span>
+              <span class="metric-desc">ThingsBoard key: <code>maturity_c_hour</code></span>
+            </div>
+          </article>
+
+          <article class="card metric metric--gradient-purple">
+            <div class="metric-top">
+              <span class="metric-label">Curing Duration / Hours</span>
+              <span class="chip chip--navy" data-icon="activity" data-size="18"></span>
+            </div>
+            <div class="metric-row">
+              <div class="metric-value"><span id="tbValHours">--</span><span class="unit">hrs</span></div>
+            </div>
+            <div class="metric-foot">
+              <span class="metric-detail" id="tbHoursDelta">Elapsed curing age</span>
+              <span class="metric-desc">ThingsBoard key: <code>simulated_hours</code></span>
+            </div>
+          </article>
+
+          <article class="card metric metric--gradient-green">
+            <div class="metric-top">
+              <span class="metric-label">Sensor Health & State</span>
+              <span class="chip chip--green" id="tbSensorChip" data-icon="radio" data-size="18"></span>
+            </div>
+            <div class="metric-row">
+              <div class="metric-value metric-value--status"><span id="tbValStatus">ONLINE</span></div>
+            </div>
+            <div class="metric-foot">
+              <span class="metric-detail" id="tbStatusDetail">Telemetry streaming actively</span>
+              <span class="metric-desc">ThingsBoard key: <code>sensor_status</code></span>
+            </div>
+          </article>
+        </div>
+
+        <!-- Charts & Telemetry Inspector -->
+        <div class="grid-charts" style="margin-top: 20px;">
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h3>ThingsBoard Live Telemetry Stream</h3>
+                <p>Real-time sensor temperature curve streamed directly from ThingsBoard Cloud</p>
+              </div>
+              <span class="badge badge--tb"><span class="live-dot"></span> LIVE CLOUD STREAM</span>
+            </div>
+            <div id="chartTbLive"></div>
+          </article>
+
+          <!-- Discovered Keys & Raw Payload Inspector -->
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h3>Discovered Keys & Raw Values</h3>
+                <p>Dynamically discovered registered timeseries keys and latest values</p>
+              </div>
+              <span class="badge badge--live" id="dashTbKeysCount">0 KEYS</span>
+            </div>
+            
+            <div class="tb-keys-container">
+              <div class="tb-keys-label">Registered Telemetry Keys:</div>
+              <div class="tb-key-chips" id="dashTbKeysList">
+                <span class="key-chip">Discovering keys…</span>
+              </div>
+            </div>
+
+            <div class="tb-raw-table-wrap">
+              <table class="tb-raw-table">
+                <thead>
+                  <tr>
+                    <th>Telemetry Key</th>
+                    <th>Latest Value</th>
+                    <th class="num">Data Type</th>
+                  </tr>
+                </thead>
+                <tbody id="dashTbRawBody">
+                  <tr><td colspan="3" style="text-align:center; color:var(--muted); padding: 24px;">Connecting to ThingsBoard API...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </article>
         </div>
       </section>
@@ -269,6 +461,7 @@
               <select id="setMode" autocomplete="off">
                 <option value="sim">Simulation (no hardware)</option>
                 <option value="esp">ESP32 over HTTP</option>
+                <option value="tb">ThingsBoard Cloud IoT (REST API)</option>
               </select>
               <span class="help">Switching source clears the current readings.</span>
             </div>
@@ -280,6 +473,25 @@
             <div class="field" id="fieldPoll">
               <label for="setPoll">Poll interval (seconds)</label>
               <input id="setPoll" type="number" min="1" max="60" step="1" inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="field is-hidden" id="fieldTbInfo" style="margin-top: 14px; padding: 14px; background: #f8fafc; border: 1px solid var(--line); border-radius: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong style="font-size: 13px; color: var(--ink);">ThingsBoard REST API</strong>
+                <span class="badge badge--tb" id="tbBadgeStatus">CONNECTING</span>
+              </div>
+              <div style="font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px;">
+                <div>Device Name: <strong id="tbDeviceName" style="color: var(--ink-2);">—</strong></div>
+                <div>Device UUID: <code id="tbDeviceId">—</code></div>
+                <div style="margin-top: 4px;">Discovered Telemetry Keys (<span id="tbKeyCount">0</span>):</div>
+                <div id="tbKeyChips" style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px;">
+                  <span style="color: var(--muted); font-style: italic;">Auto-discovering keys…</span>
+                </div>
+              </div>
+              <div style="margin-top: 12px; display: flex; gap: 8px;">
+                <button class="btn" type="button" id="btnTbLoadHistory" style="padding: 6px 12px; font-size: 12px;">
+                  <span data-icon="download" data-size="14"></span>Fetch History from ThingsBoard
+                </button>
+              </div>
             </div>
           </article>
 

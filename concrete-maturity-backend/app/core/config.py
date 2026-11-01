@@ -28,6 +28,22 @@ class Settings(BaseSettings):
     THINGSBOARD_HOST: str = "mqtt.thingsboard.cloud"
     THINGSBOARD_PORT: int = 1883
 
+    # ThingsBoard REST API credentials
+    TB_URL: str = "https://thingsboard.cloud"
+    TB_USERNAME: str = ""
+    TB_PASSWORD: str = ""
+    TB_DEVICE_ID: str = ""
+
+    @property
+    def is_tb_configured(self) -> bool:
+        """Returns True if all required ThingsBoard REST credentials are set."""
+        return bool(
+            self.TB_URL.strip()
+            and self.TB_USERNAME.strip()
+            and self.TB_PASSWORD.strip()
+            and self.TB_DEVICE_ID.strip()
+        )
+
     # ── Maturity Defaults ─────────────────────────────────────────────────────
     DEFAULT_DATUM_TEMPERATURE: float = -10.0
     DEFAULT_TARGET_MATURITY: float = 500.0

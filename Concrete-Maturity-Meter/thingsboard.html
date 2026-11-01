@@ -1,0 +1,1043 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ThingsBoard Cloud IoT Live Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --surface: #0f172a;
+      --surface-card: #131d35;
+      --surface-elevated: #1a2747;
+      --ink: #f8fafc;
+      --ink-2: #cbd5e1;
+      --muted: #64748b;
+      --line: #1e293b;
+      --line-bright: #334155;
+      --accent: #0284c7;
+      --accent-glow: rgba(2, 132, 199, 0.35);
+      --cyan: #06b6d4;
+      --teal: #0d9488;
+      --ok: #10b981;
+      --ok-glow: rgba(16, 185, 129, 0.25);
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --radius-sm: 8px;
+      --radius: 14px;
+      --radius-lg: 20px;
+      --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      --shadow-hover: 0 8px 30px rgba(2, 132, 199, 0.2);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    code, pre {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    /* ---------- Top Navigation Bar ---------- */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      height: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 0 28px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      color: #fff;
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+    .brand-text h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #fff;
+    }
+    .brand-text p {
+      font-size: 11.5px;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      text-decoration: none;
+      transition: all .15s ease;
+      border: 1px solid var(--line-bright);
+      background: var(--surface-card);
+      color: var(--ink-2);
+    }
+    .btn:hover {
+      background: var(--surface-elevated);
+      color: #fff;
+      border-color: #475569;
+      transform: translateY(-1px);
+    }
+    .btn:active {
+      transform: translateY(1px);
+    }
+    .btn--primary {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      border-color: #38bdf8;
+      color: #fff;
+      box-shadow: 0 2px 10px var(--accent-glow);
+    }
+    .btn--primary:hover {
+      background: linear-gradient(135deg, #0369a1, #075985);
+      border-color: #7dd3fc;
+      box-shadow: 0 4px 16px rgba(2, 132, 199, 0.45);
+    }
+    .btn--ghost {
+      background: transparent;
+      border-color: var(--line);
+    }
+    .btn--ghost:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--line-bright);
+    }
+    .btn--api {
+      background: rgba(6, 182, 212, 0.12);
+      border-color: rgba(6, 182, 212, 0.35);
+      color: #38bdf8;
+    }
+    .btn--api:hover {
+      background: rgba(6, 182, 212, 0.22);
+      border-color: #38bdf8;
+      color: #fff;
+    }
+
+    /* ---------- Status Badges ---------- */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 999px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .badge--online {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge--offline {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .badge--tb {
+      background: rgba(2, 132, 199, 0.18);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
+      animation: pulse-beacon 1.6s infinite;
+    }
+
+    @keyframes pulse-beacon {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.3; transform: scale(1.3); }
+    }
+
+    /* ---------- Main Shell ---------- */
+    .shell {
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px 28px 60px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    /* ---------- Redirect Alert Bar ---------- */
+    .redirect-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 20px;
+      background: linear-gradient(90deg, rgba(2, 132, 199, 0.15), rgba(15, 23, 42, 0.6));
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: var(--radius);
+      flex-wrap: wrap;
+    }
+    .redirect-banner-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .redirect-banner-left svg {
+      color: var(--cyan);
+      flex: none;
+    }
+    .redirect-banner-text {
+      font-size: 13.5px;
+      color: var(--ink-2);
+    }
+    .redirect-banner-text strong {
+      color: #fff;
+    }
+    .redirect-banner-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* ---------- Device Metadata Header Strip ---------- */
+    .device-strip {
+      background: var(--surface-card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px 24px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr) auto;
+      gap: 20px;
+      align-items: center;
+      box-shadow: var(--shadow);
+    }
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .meta-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .meta-val {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .uuid-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .uuid-box code {
+      font-size: 12px;
+      color: #38bdf8;
+      background: rgba(2, 132, 199, 0.12);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+    }
+    .btn-copy {
+      background: transparent;
+      border: 1px solid var(--line-bright);
+      color: var(--ink-2);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-copy:hover {
+      background: var(--surface-elevated);
+      color: #fff;
+      border-color: #64748b;
+    }
+
+    /* ---------- KPI Metric Cards Grid ---------- */
+    .grid-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+    }
+    .card-metric {
+      background: var(--surface-card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+      transition: transform .2s, border-color .2s;
+    }
+    .card-metric:hover {
+      transform: translateY(-2px);
+      border-color: var(--line-bright);
+    }
+    .card-metric::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .card-metric--temp::before { background: linear-gradient(90deg, #0284c7, #38bdf8); }
+    .card-metric--mat::before { background: linear-gradient(90deg, #0d9488, #2dd4bf); }
+    .card-metric--hours::before { background: linear-gradient(90deg, #8b5cf6, #c084fc); }
+    .card-metric--status::before { background: linear-gradient(90deg, #10b981, #6ee7b7); }
+
+    .card-metric-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .metric-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink-2);
+    }
+    .metric-icon-wrap {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+    }
+    .card-metric--temp .metric-icon-wrap { background: rgba(2, 132, 199, 0.15); color: #38bdf8; }
+    .card-metric--mat .metric-icon-wrap { background: rgba(13, 148, 136, 0.15); color: #2dd4bf; }
+    .card-metric--hours .metric-icon-wrap { background: rgba(139, 92, 246, 0.15); color: #c084fc; }
+    .card-metric--status .metric-icon-wrap { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+
+    .metric-val-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .metric-big-num {
+      font-size: 38px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .metric-unit {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    .metric-desc {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .metric-desc code {
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+
+    /* ---------- Middle Dual Grid (Chart & Keys) ---------- */
+    .grid-main {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--surface-card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .card-title-group h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.01em;
+    }
+    .card-title-group p {
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    /* Chart SVG Area */
+    .chart-container {
+      position: relative;
+      height: 320px;
+      width: 100%;
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      overflow: hidden;
+    }
+    .chart-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .chart-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* Discovered Keys Chips */
+    .keys-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .key-chip {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--line-bright);
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      color: #e2e8f0;
+      font-family: 'JetBrains Mono', monospace;
+      transition: all .15s;
+    }
+    .key-chip:hover {
+      background: rgba(2, 132, 199, 0.2);
+      border-color: #38bdf8;
+      color: #fff;
+    }
+
+    /* Table of Raw Values */
+    .table-wrap {
+      overflow-y: auto;
+      max-height: 250px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+    th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.9);
+      border-bottom: 1px solid var(--line);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    td {
+      padding: 9px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--ink-2);
+      font-variant-numeric: tabular-nums;
+    }
+    tr:last-child td { border-bottom: 0; }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+    .badge-type {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ---------- Bottom Section: Live JSON Payload Inspector ---------- */
+    .json-card {
+      background: var(--surface-card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .json-box {
+      background: #060911;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      max-height: 220px;
+      overflow-y: auto;
+      font-size: 12px;
+      color: #38bdf8;
+      line-height: 1.5;
+    }
+
+    /* ---------- Toast / Flash Notifications ---------- */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 100;
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      background: #0284c7;
+      color: #fff;
+      font-size: 13.5px;
+      font-weight: 600;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: transform .25s ease, opacity .25s ease;
+      pointer-events: none;
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 1200px) {
+      .grid-metrics { grid-template-columns: repeat(2, 1fr); }
+      .device-strip { grid-template-columns: repeat(2, 1fr); }
+      .grid-main { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .topbar { padding: 0 16px; }
+      .shell { padding: 16px 16px 40px; }
+      .grid-metrics { grid-template-columns: 1fr; }
+      .device-strip { grid-template-columns: 1fr; }
+      .brand-text p { display: none; }
+      .topbar-actions { gap: 6px; }
+      .btn { padding: 6px 12px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>ThingsBoard Cloud IoT Live Dashboard</h1>
+        <p>Telemetry stream from REST API</p>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <!-- Redirect button back to main page -->
+      <a href="/dashboard" class="btn" title="Return to Main Concrete Maturity Dashboard">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>Main Dashboard</span>
+      </a>
+
+      <!-- Direct API endpoint link -->
+      <a href="/api/v1/thingsboard/telemetry/latest" target="_blank" class="btn btn--api" title="Open the raw backend JSON endpoint in a new tab">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+        <span>Raw API Endpoint</span>
+      </a>
+
+      <button class="btn btn--primary" id="btnRefresh" type="button" title="Fetch fresh telemetry immediately">
+        <svg id="refreshIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+          <path d="M3 3v5h5"></path>
+          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+          <path d="M21 21v-5h-5"></path>
+        </svg>
+        <span>Refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Shell -->
+  <main class="shell">
+
+    <!-- Redirect & Context Bar -->
+    <div class="redirect-banner">
+      <div class="redirect-banner-left">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <div class="redirect-banner-text">
+          Showing real-time data from <code>http://localhost:8000/api/v1/thingsboard/telemetry/latest</code>.
+          You can seamlessly navigate between the <strong>Main Maturity Meter</strong> and this <strong>ThingsBoard Dedicated Dashboard</strong>.
+        </div>
+      </div>
+      <div class="redirect-banner-actions">
+        <span class="badge badge--online" id="streamBadge">
+          <span class="live-dot"></span> LIVE POLLING (3s)
+        </span>
+        <button class="btn btn--ghost" id="btnSyncDb" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+          </svg>
+          Sync to DB
+        </button>
+      </div>
+    </div>
+
+    <!-- Device Metadata Strip -->
+    <article class="device-strip">
+      <div class="meta-item">
+        <span class="meta-label">Device Name</span>
+        <strong class="meta-val" id="metaDevName">ESP32 Curing Sensor Unit 1</strong>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Device UUID</span>
+        <div class="uuid-box">
+          <code id="metaDevId">da6577c0-d532-11f1-a4d4-bf613d4f8cee</code>
+          <button class="btn-copy" id="btnCopyUuid" type="button">Copy</button>
+        </div>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Operating Mode</span>
+        <span class="meta-val" id="metaMode">REAL / DUMMY</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">ThingsBoard Timestamp</span>
+        <strong class="meta-val" id="metaRecordedAt">—</strong>
+      </div>
+      <div class="meta-item" style="text-align: right;">
+        <span class="meta-label">Connection Health</span>
+        <div><span class="badge badge--online" id="metaSensorStatus">HEALTHY</span></div>
+      </div>
+    </article>
+
+    <!-- 4 Hero KPI Cards -->
+    <section class="grid-metrics">
+      <!-- Temperature -->
+      <article class="card-metric card-metric--temp">
+        <div class="card-metric-top">
+          <span class="metric-title">Concrete Temperature</span>
+          <div class="metric-icon-wrap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"></path>
+            </svg>
+          </div>
+        </div>
+        <div class="metric-val-wrap">
+          <span class="metric-big-num" id="valTemp">--</span>
+          <span class="metric-unit">°C</span>
+        </div>
+        <div class="metric-desc">
+          <span>ThingsBoard key:</span> <code>temperature_c</code>
+        </div>
+      </article>
+
+      <!-- Cumulative Maturity -->
+      <article class="card-metric card-metric--mat">
+        <div class="card-metric-top">
+          <span class="metric-title">Cumulative Maturity</span>
+          <div class="metric-icon-wrap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"></path>
+              <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"></path>
+              <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"></path>
+            </svg>
+          </div>
+        </div>
+        <div class="metric-val-wrap">
+          <span class="metric-big-num" id="valMat">--</span>
+          <span class="metric-unit">°C·h</span>
+        </div>
+        <div class="metric-desc">
+          <span>Nurse-Saul Factor:</span> <code>maturity_c_hour</code>
+        </div>
+      </article>
+
+      <!-- Curing Duration -->
+      <article class="card-metric card-metric--hours">
+        <div class="card-metric-top">
+          <span class="metric-title">Curing Duration / Hours</span>
+          <div class="metric-icon-wrap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+          </div>
+        </div>
+        <div class="metric-val-wrap">
+          <span class="metric-big-num" id="valHours">--</span>
+          <span class="metric-unit">hrs</span>
+        </div>
+        <div class="metric-desc">
+          <span>Telemetry key:</span> <code>simulated_hours</code>
+        </div>
+      </article>
+
+      <!-- Sensor Status -->
+      <article class="card-metric card-metric--status">
+        <div class="card-metric-top">
+          <span class="metric-title">Sensor Health & State</span>
+          <div class="metric-icon-wrap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path>
+              <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path>
+              <circle cx="12" cy="12" r="2"></circle>
+              <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path>
+              <path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"></path>
+            </svg>
+          </div>
+        </div>
+        <div class="metric-val-wrap">
+          <span class="metric-big-num" style="font-size: 28px;" id="valStatus">ONLINE</span>
+        </div>
+        <div class="metric-desc">
+          <span>Hardware state:</span> <code>sensor_status: true</code>
+        </div>
+      </article>
+    </section>
+
+    <!-- Middle Section: Live SVG Chart & Discovered Keys -->
+    <section class="grid-main">
+      <!-- Live Chart -->
+      <article class="card">
+        <div class="card-head">
+          <div class="card-title-group">
+            <h2>Real-Time Telemetry Curve</h2>
+            <p>Live temperature streamed directly from ThingsBoard Cloud</p>
+          </div>
+          <span class="badge badge--tb"><span class="live-dot"></span> LIVE CLOUD STREAM</span>
+        </div>
+
+        <div class="chart-container" id="chartContainer">
+          <svg class="chart-svg" id="chartSvg" viewBox="0 0 800 320" preserveAspectRatio="none">
+            <!-- Grid lines & curve dynamically drawn via JS -->
+          </svg>
+          <div class="chart-empty" id="chartEmpty">Listening for ThingsBoard readings…</div>
+        </div>
+      </article>
+
+      <!-- Discovered Keys & Raw Key-Value Table -->
+      <article class="card">
+        <div class="card-head">
+          <div class="card-title-group">
+            <h2>Discovered Telemetry Keys</h2>
+            <p id="keysCount">Dynamically detected keys</p>
+          </div>
+        </div>
+
+        <div class="keys-wrap" id="keysChips">
+          <span class="key-chip">Discovering keys…</span>
+        </div>
+
+        <div class="card-title-group" style="margin-top: 10px;">
+          <h2>Latest Values Table</h2>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Telemetry Key</th>
+                <th>Value</th>
+                <th style="text-align: right;">Type</th>
+              </tr>
+            </thead>
+            <tbody id="rawTableBody">
+              <tr><td colspan="3" style="text-align:center; color:var(--muted); padding: 20px;">Connecting to API...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <!-- Bottom Section: Live Raw JSON Inspector -->
+    <article class="json-card">
+      <div class="card-head" style="margin-bottom: 12px;">
+        <div class="card-title-group">
+          <h2>Live Raw JSON Inspector</h2>
+          <p>Exact response payload from <code>http://localhost:8000/api/v1/thingsboard/telemetry/latest</code></p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-copy" id="btnCopyJson" type="button">Copy JSON</button>
+        </div>
+      </div>
+      <pre class="json-box" id="jsonBox">{ "status": "Waiting for ThingsBoard telemetry..." }</pre>
+    </article>
+
+  </main>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">Notification</div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const $ = (sel) => document.querySelector(sel);
+      const points = []; // [{ x: hours, y: temp, ts: ms }]
+      let isFetching = false;
+      let lastTs = null;
+
+      function showToast(msg) {
+        const el = $('#toast');
+        el.textContent = msg;
+        el.classList.add('show');
+        setTimeout(() => el.classList.remove('show'), 3000);
+      }
+
+      function fmtNum(n, d = 1) {
+        if (n == null || !Number.isFinite(n)) return '--';
+        return n.toFixed(d);
+      }
+
+      function esc(s) {
+        return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+
+      async function fetchLatest() {
+        if (isFetching) return;
+        isFetching = true;
+        const icon = $('#refreshIcon');
+        if (icon) icon.style.animation = 'spin 1s linear infinite';
+
+        try {
+          const res = await fetch('/api/v1/thingsboard/telemetry/latest', { cache: 'no-store' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          renderDashboard(data);
+        } catch (err) {
+          $('#streamBadge').className = 'badge badge--offline';
+          $('#streamBadge').innerHTML = '<span class="live-dot" style="background:#ef4444"></span> API OFFLINE';
+          $('#valStatus').textContent = 'OFFLINE';
+          $('#metaSensorStatus').className = 'badge badge--offline';
+          $('#metaSensorStatus').textContent = 'OFFLINE';
+        } finally {
+          isFetching = false;
+          if (icon) icon.style.animation = '';
+        }
+      }
+
+      function renderDashboard(data) {
+        if (!data) return;
+
+        // 1. Device Strip
+        if (data.device_id) {
+          $('#metaDevId').textContent = data.device_id;
+        }
+        if (data.data_mode) {
+          $('#metaMode').textContent = data.data_mode.toUpperCase();
+        }
+        if (data.recorded_at) {
+          const d = new Date(data.recorded_at);
+          $('#metaRecordedAt').textContent = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+        }
+
+        const isOnline = data.sensor_status !== false;
+        $('#streamBadge').className = 'badge ' + (isOnline ? 'badge--online' : 'badge--offline');
+        $('#streamBadge').innerHTML = '<span class="live-dot"></span> LIVE (3s)';
+        $('#metaSensorStatus').className = 'badge ' + (isOnline ? 'badge--online' : 'badge--offline');
+        $('#metaSensorStatus').textContent = isOnline ? 'HEALTHY' : 'FAULT';
+        $('#valStatus').textContent = isOnline ? 'ONLINE' : 'FAULT';
+
+        // 2. 4 Core Metrics
+        $('#valTemp').textContent = fmtNum(data.temperature_c, 1);
+        $('#valMat').textContent = fmtNum(data.maturity_c_hour, 1);
+        $('#valHours').textContent = fmtNum(data.simulated_hours, 2);
+
+        // 3. Points for SVG Chart
+        const temp = data.temperature_c;
+        if (temp != null && Number.isFinite(temp) && data.ts !== lastTs) {
+          lastTs = data.ts;
+          const hours = typeof data.simulated_hours === 'number' && data.simulated_hours > 0
+            ? data.simulated_hours
+            : (points.length ? points[points.length - 1].x + 0.05 : 0.1);
+          points.push({ x: hours, y: temp, ts: data.ts || Date.now() });
+          if (points.length > 60) points.shift();
+          renderChart();
+        }
+
+        // 4. Discovered Keys
+        if (Array.isArray(data.keys)) {
+          $('#keysCount').textContent = data.keys.length + ' registered timeseries keys';
+          $('#keysChips').innerHTML = data.keys.map(k => '<span class="key-chip">' + esc(k) + '</span>').join('');
+        }
+
+        // 5. Raw Values Table
+        if (data.raw_values) {
+          const rows = [];
+          for (const k in data.raw_values) {
+            const v = data.raw_values[k];
+            const type = typeof v === 'boolean' ? 'bool' : typeof v === 'number' ? (Number.isInteger(v) ? 'int' : 'float') : 'string';
+            rows.push('<tr><td><code style="color:#38bdf8;">' + esc(k) + '</code></td><td><strong style="color:#fff;">' + esc(v) + '</strong></td><td style="text-align:right;"><span class="badge-type">' + type + '</span></td></tr>');
+          }
+          $('#rawTableBody').innerHTML = rows.join('');
+        }
+
+        // 6. Raw JSON box
+        $('#jsonBox').textContent = JSON.stringify(data, null, 2);
+      }
+
+      function renderChart() {
+        const svg = $('#chartSvg');
+        const empty = $('#chartEmpty');
+        if (!points.length) {
+          empty.style.display = 'flex';
+          svg.innerHTML = '';
+          return;
+        }
+        empty.style.display = 'none';
+
+        const w = 800, h = 320;
+        const pad = { t: 25, r: 30, b: 35, l: 50 };
+        const xs = points.map(p => p.x);
+        const ys = points.map(p => p.y);
+        let minX = Math.min(...xs), maxX = Math.max(...xs);
+        if (maxX - minX < 0.001) maxX = minX + 1;
+        let minY = Math.min(...ys) - 1, maxY = Math.max(...ys) + 1;
+        if (maxY - minY < 2) maxY = minY + 2;
+
+        const sx = x => pad.l + ((x - minX) / (maxX - minX)) * (w - pad.l - pad.r);
+        const sy = y => h - pad.b - ((y - minY) / (maxY - minY)) * (h - pad.t - pad.b);
+
+        let gridHtml = '';
+        // 4 horizontal grid lines
+        for (let i = 0; i <= 4; i++) {
+          const yVal = minY + (i / 4) * (maxY - minY);
+          const py = sy(yVal);
+          gridHtml += `<line x1="${pad.l}" y1="${py}" x2="${w - pad.r}" y2="${py}" stroke="#1e293b" stroke-width="1" stroke-dasharray="3 3"/>`;
+          gridHtml += `<text x="${pad.l - 8}" y="${py + 4}" fill="#64748b" font-size="11" text-anchor="end" font-family="JetBrains Mono">${yVal.toFixed(1)}°C</text>`;
+        }
+
+        let d = '';
+        points.forEach((p, idx) => {
+          const px = sx(p.x), py = sy(p.y);
+          d += (idx === 0 ? 'M' : 'L') + ` ${px.toFixed(1)} ${py.toFixed(1)}`;
+        });
+
+        // Area gradient fill
+        const first = points[0], last = points[points.length - 1];
+        const areaD = `${d} L ${sx(last.x)} ${h - pad.b} L ${sx(first.x)} ${h - pad.b} Z`;
+
+        svg.innerHTML = `
+          <defs>
+            <linearGradient id="curveGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#0284c7" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="#0284c7" stop-opacity="0.0"/>
+            </linearGradient>
+          </defs>
+          ${gridHtml}
+          <path d="${areaD}" fill="url(#curveGradient)"/>
+          <path d="${d}" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          ${points.map(p => `<circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="3.5" fill="#0284c7" stroke="#fff" stroke-width="1.5"/>`).join('')}
+        `;
+      }
+
+      // Event Listeners
+      $('#btnRefresh').addEventListener('click', () => {
+        fetchLatest();
+        showToast('Refreshing ThingsBoard telemetry…');
+      });
+
+      $('#btnCopyUuid').addEventListener('click', () => {
+        const uuid = $('#metaDevId').textContent;
+        navigator.clipboard.writeText(uuid).then(() => {
+          $('#btnCopyUuid').textContent = 'Copied ✓';
+          setTimeout(() => $('#btnCopyUuid').textContent = 'Copy', 2000);
+          showToast('Device UUID copied to clipboard');
+        });
+      });
+
+      $('#btnCopyJson').addEventListener('click', () => {
+        navigator.clipboard.writeText($('#jsonBox').textContent).then(() => {
+          showToast('JSON response copied');
+        });
+      });
+
+      $('#btnSyncDb').addEventListener('click', async () => {
+        try {
+          showToast('Syncing with database…');
+          const res = await fetch('/api/v1/thingsboard/sync', { method: 'POST' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          showToast(`✓ Synced to DB! Reading #${data.reading_id} (${data.temperature_c}°C)`);
+        } catch (err) {
+          showToast('Sync failed: ' + err.message);
+        }
+      });
+
+      // Initial fetch + 3.5s interval
+      fetchLatest();
+      setInterval(fetchLatest, 3500);
+    })();
+  </script>
+</body>
+</html>
